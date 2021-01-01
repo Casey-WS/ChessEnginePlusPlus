@@ -16,6 +16,7 @@
 int main() {
   // Create a board of our own
   Board b("r3k2r/p2n1pp1/2pb1p1p/qp1p3P/3P1PP1/2NQP1N1/PPP5/R3K2R w KQkq - 2 15");
-  std::cout << b.perft(5) << std::endl;
+  int count = b.perft(2, true);
+  std::cout << "Nodes searched: " << count << std::endl;
   return 0;
 }

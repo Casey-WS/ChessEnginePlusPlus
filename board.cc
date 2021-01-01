@@ -23,11 +23,133 @@ int get_pos_rankfile(std::string pos) {
   return A1 + file * RIGHT + rank * UP; 
 }
 
-Board& Board::operator=(Board other) {
-    delete[] this->_board;
-    memcpy(this, &other, sizeof(Board));
-    other._board = NULL;
-    return *this;
+int symbol_to_piece(char sym) {
+  int piece_num;
+  switch(sym) {
+    case ' ':
+      piece_num = EMPTY;
+      break;
+    case 'p':
+      piece_num = -PAWN;
+      break;
+    case 'P':
+      piece_num = PAWN;
+      break;
+    case 'q':
+      piece_num = -QUEEN;
+      break;
+    case 'Q':
+      piece_num = QUEEN;
+      break;
+    case 'k':
+      piece_num = -KING;
+      break;
+    case 'K':
+      piece_num = KING;
+      break;
+    case 'N':
+      piece_num = KNIGHT;
+      break;
+    case 'n':
+      piece_num =  -KNIGHT;
+      break;
+    case 'b':
+      piece_num = -BISHOP;
+      break;
+    case 'B':
+      piece_num = BISHOP;
+      break;
+    case 'r':
+      piece_num = -ROOK;
+      break;
+    case 'R':
+      piece_num = ROOK;
+      break;
+    default:
+      piece_num = OUTOFBOUNDS;
+  }
+  return piece_num;
+}
+
+std::string get_symbol(int piece_num) {
+  std::string symbol;
+  switch(piece_num) {
+    case NO_PROMOTION:
+      symbol = "";
+      break;
+    case EMPTY:
+      symbol = "_";
+      break;
+    case PAWN:
+      symbol = "P";
+      break;
+    case -PAWN:
+      symbol = "p";
+      break;
+    case KNIGHT:
+      symbol = "N";
+      break;
+    case -KNIGHT:
+      symbol = "n";
+      break;
+    case ROOK:
+      symbol = "R";
+      break;
+    case -ROOK:
+      symbol = "r";
+      break;
+    case BISHOP:
+      symbol = "B";
+      break;
+    case -BISHOP:
+      symbol = "b";
+      break;
+    case KING:
+      symbol = "K";
+      break;
+    case -KING:
+      symbol = "k";
+      break;
+    case QUEEN:
+      symbol = "Q";
+      break;
+    case -QUEEN:
+      symbol = "q";
+      break;
+    default:
+      symbol = "X";
+      break;
+  }
+  return symbol;
+}
+
+// Return rank/file notation for internal index intothe board array
+std::string sq_name(int sq) {
+  int delta = sq - A1;
+  int file = delta % 8;
+  int rank = 1 + (delta / UP);
+  char file_ch = (char)((int)'a' + file);
+  return file_ch + std::to_string(rank);
+}
+
+// TODO: This function could just ask for the FEN of the other function, and
+//       initialize the board from that... So why not?
+Board::Board(const Board& other) {
+  _board = new int[BOARD_ARR_LEN];
+  std::copy(other._board, other._board+BOARD_ARR_LEN, _board);
+  _half_moves = other._half_moves;
+  _full_moves = other._full_moves;
+  _color_to_play = other._color_to_play;
+  _en_passant_square = other._en_passant_square;
+  _castling_rights = new bool*[2]();
+  _castling_rights[WHITE] = new bool[2]();
+  _castling_rights[BLACK] = new bool[2]();
+  _castling_rights[WHITE][QUEEN_SIDE] = other._castling_rights[WHITE][QUEEN_SIDE];
+  _castling_rights[WHITE][KING_SIDE] = other._castling_rights[WHITE][KING_SIDE];;
+  _castling_rights[BLACK][QUEEN_SIDE] = other._castling_rights[BLACK][QUEEN_SIDE];;
+  _castling_rights[BLACK][KING_SIDE] = other._castling_rights[BLACK][KING_SIDE];;
+  _white_king_sq = other._white_king_sq;
+  _black_king_sq = other._black_king_sq;
 }
 
 // Initialize a chessboard object from FEN
@@ -99,24 +221,11 @@ Board::Board(std::string fen) {
   _VALID_ATTACKS = _generate_valid_attacks();
 }
 
-// TODO: This function could just ask for the FEN of the other function, and
-//       initialize the board from that... So why not?
-Board::Board(const Board& other) {
-  _board = new int[BOARD_ARR_LEN];
-  std::copy(other._board, other._board+BOARD_ARR_LEN, _board);
-  _half_moves = other._half_moves;
-  _full_moves = other._full_moves;
-  _color_to_play = other._color_to_play;
-  _en_passant_square = other._en_passant_square;
-  _castling_rights = new bool*[2]();
-  _castling_rights[WHITE] = new bool[2]();
-  _castling_rights[BLACK] = new bool[2]();
-  _castling_rights[WHITE][QUEEN_SIDE] = other._castling_rights[WHITE][QUEEN_SIDE];
-  _castling_rights[WHITE][KING_SIDE] = other._castling_rights[WHITE][KING_SIDE];;
-  _castling_rights[BLACK][QUEEN_SIDE] = other._castling_rights[BLACK][QUEEN_SIDE];;
-  _castling_rights[BLACK][KING_SIDE] = other._castling_rights[BLACK][KING_SIDE];;
-  _white_king_sq = other._white_king_sq;
-  _black_king_sq = other._black_king_sq;
+Board& Board::operator=(Board other) {
+    delete[] this->_board;
+    memcpy(this, &other, sizeof(Board));
+    other._board = NULL;
+    return *this;
 }
 
 Board::~Board() {
@@ -125,6 +234,10 @@ Board::~Board() {
   delete[] _castling_rights;
   delete[] _board;
   _board = NULL;
+}
+
+void Board::makeMove(int src, int dest) {
+    this->makeMove(src, dest, NO_PROMOTION);
 }
 
 // Move a piece on src to dest
@@ -364,7 +477,7 @@ void Board::makeMove(int src, int dest, int promotion) {
 // Generate all possible legal moves for the current board
 std::vector<Move> Board::generateMoves() {
   std::vector<Move> moves;
-  std::vector<struct Move> pseudo_moves;
+  std::vector<Move> pseudo_moves;
 
   for (int sq = A1; sq <= H8; sq++) { // Loop over all squares
     if (_board[sq] == OUTOFBOUNDS) {  // Skip out of bounds
@@ -415,24 +528,24 @@ std::vector<Move> Board::generateMoves() {
       int push = p == PAWN ? UP : DOWN;
       bool home_rank = p == PAWN ? (sq <= H1 + UP) : (sq >= A8 + DOWN);  // Relies on fact Pawns are never behind their home rank
       if (_board[sq + push] == EMPTY) {
-        pseudo_moves.push_back((struct Move){sq, sq+push, NO_PROMOTION});
+        pseudo_moves.push_back((Move){sq, sq+push, NO_PROMOTION});
         if (_board[sq + 2*push] == EMPTY && home_rank) {
-          pseudo_moves.push_back((struct Move){sq, sq+2*push, NO_PROMOTION});
+          pseudo_moves.push_back((Move){sq, sq+2*push, NO_PROMOTION});
         }
       }
       // Pawn promotion
       if (p == -PAWN && sq >= A1 + UP && sq <= H1 + UP && _board[sq+DOWN] == EMPTY) {  // Black promotion
-        pseudo_moves.push_back((struct Move){sq, sq+DOWN, -QUEEN});
-        pseudo_moves.push_back((struct Move){sq, sq+DOWN, -BISHOP});
-        pseudo_moves.push_back((struct Move){sq, sq+DOWN, -ROOK});
-        pseudo_moves.push_back((struct Move){sq, sq+DOWN, -KNIGHT});
+        pseudo_moves.push_back((Move){sq, sq+DOWN, -QUEEN});
+        pseudo_moves.push_back((Move){sq, sq+DOWN, -BISHOP});
+        pseudo_moves.push_back((Move){sq, sq+DOWN, -ROOK});
+        pseudo_moves.push_back((Move){sq, sq+DOWN, -KNIGHT});
       }
       
       if (p == PAWN && sq >= A8 + DOWN && sq <= H8 + DOWN && _board[sq+UP] == EMPTY) {  // White promotion
-        pseudo_moves.push_back((struct Move){sq, sq+UP, QUEEN});
-        pseudo_moves.push_back((struct Move){sq, sq+UP, BISHOP});
-        pseudo_moves.push_back((struct Move){sq, sq+UP, ROOK});
-        pseudo_moves.push_back((struct Move){sq, sq+UP, KNIGHT});
+        pseudo_moves.push_back((Move){sq, sq+UP, QUEEN});
+        pseudo_moves.push_back((Move){sq, sq+UP, BISHOP});
+        pseudo_moves.push_back((Move){sq, sq+UP, ROOK});
+        pseudo_moves.push_back((Move){sq, sq+UP, KNIGHT});
       }
 
       // Pawn Captures
@@ -441,12 +554,12 @@ std::vector<Move> Board::generateMoves() {
       if (_board[left_attack] != OUTOFBOUNDS &&
           (_board[left_attack]*p < 0 ||
           _en_passant_square == left_attack)) {
-            pseudo_moves.push_back((struct Move){sq, sq+push+LEFT, NO_PROMOTION});
+            pseudo_moves.push_back((Move){sq, sq+push+LEFT, NO_PROMOTION});
       }
       if (_board[right_attack] != OUTOFBOUNDS &&
           (_board[right_attack]*p < 0 ||
           _en_passant_square == right_attack)) {
-            pseudo_moves.push_back((struct Move){sq, sq+push+RIGHT, NO_PROMOTION});
+            pseudo_moves.push_back((Move){sq, sq+push+RIGHT, NO_PROMOTION});
       }
       continue;  // No further handling of pawn moves
     }
@@ -463,14 +576,14 @@ std::vector<Move> Board::generateMoves() {
           break;
         }
         if (q == EMPTY) {
-          pseudo_moves.push_back((struct Move){sq, dest, NO_PROMOTION});
+          pseudo_moves.push_back((Move){sq, dest, NO_PROMOTION});
         } else {
           // Only allow attacks on opposing color
           if ((_color_to_play == WHITE && q > 0) ||
               (_color_to_play == BLACK && q < 0)) {
             break;
           }
-          pseudo_moves.push_back((struct Move){sq, dest, NO_PROMOTION});
+          pseudo_moves.push_back((Move){sq, dest, NO_PROMOTION});
           break;
         }
         if (p == KNIGHT || p == -KNIGHT ||
@@ -490,7 +603,7 @@ std::vector<Move> Board::generateMoves() {
         !_attacked(king_pos, !_color_to_play) &&
         !_attacked(king_pos+RIGHT, !_color_to_play) &&
         !_attacked(castle_pos, !_color_to_play)) {
-      pseudo_moves.push_back((struct Move){king_pos, castle_pos, NO_PROMOTION});
+      pseudo_moves.push_back((Move){king_pos, castle_pos, NO_PROMOTION});
     }
   }
   if (_castling_rights[_color_to_play][QUEEN_SIDE]) { // Queen-side castle
@@ -502,7 +615,7 @@ std::vector<Move> Board::generateMoves() {
         !_attacked(king_pos, !_color_to_play) &&
         !_attacked(king_pos+LEFT, !_color_to_play) &&
         !_attacked(castle_pos, !_color_to_play)) {
-      pseudo_moves.push_back((struct Move){king_pos, castle_pos, NO_PROMOTION});
+      pseudo_moves.push_back((Move){king_pos, castle_pos, NO_PROMOTION});
     }
   }
   // Filter out moves that are illegal by making each pseudo move,
@@ -525,6 +638,215 @@ std::vector<Move> Board::generateMoves() {
     }
   }
   return moves;
+}
+
+// Print the in-bounds portion of the board
+std::ostream& operator<<(std::ostream &strm, const Board &b) {
+  std::string top = " ";
+  std::string bottom = " ";
+  for (int i = 0; i < 8; i++) {
+    top = top + "_ ";
+    bottom = bottom + "¯ ";
+  }
+  std::string board;
+  for (int i = A8; i >= A1; i+=DOWN) {
+    board = board + "|";
+    for (int j = 0; j < 8; j+=RIGHT) {
+      std::string symbol = get_symbol(b._board[i + j]);
+      board = board + symbol + "|";
+    }
+    board = board + " " + std::to_string(8 - ((A8 - i) / UP));  // Print ranks
+    board = board + "\n";
+  }
+  return strm << top << "\n" << board  << bottom << "\n a b c d e f g h";
+}
+
+// Returns a string representing the Forsyth-Edwards Notation
+//  for this board
+std::string Board::to_fen() {
+  std::string fen = "";
+  for (int rank = A8; rank >= A1; rank+=DOWN) {
+    int empty_spaces = 0;
+    for (int sq = rank; sq <= rank + 7 * RIGHT; sq+=RIGHT) {
+      if (_board[sq] == EMPTY) {
+        empty_spaces++;
+      } else {
+        if (empty_spaces > 0) {
+          fen += std::to_string(empty_spaces);
+          empty_spaces = 0;
+        }
+        fen += get_symbol(_board[sq]);
+      }
+    }
+    if (empty_spaces > 0) {
+      fen += std::to_string(empty_spaces);
+      empty_spaces = 0;
+    }
+    
+    if (rank != A1) {
+      fen += "/";
+    }
+  }
+  fen += (_color_to_play == WHITE ? " w " : " b ");
+  std::string castling = "";
+  castling += _castling_rights[WHITE][KING_SIDE] ? "K" : "";
+  castling += _castling_rights[WHITE][QUEEN_SIDE] ? "Q" : "";
+  castling += _castling_rights[BLACK][KING_SIDE] ? "k" : "";
+  castling += _castling_rights[BLACK][QUEEN_SIDE] ? "q" : "";
+  fen += castling.size() == 0 ? "-" : castling;
+  fen += _en_passant_square == NO_SQUARE ? " - "
+                  : " " + sq_name(_en_passant_square) + " ";
+  fen += " " + std::to_string(_half_moves);
+  fen += " " + std::to_string(_full_moves);
+  return fen;
+}
+
+// Count the number of possible moves generated by this board
+// for each move up to certain depth
+long Board::perft(int depth, bool printSubcounts) {
+  std::vector<Move> moves;
+  long count = 0;
+  if (depth == 0) {
+    return count;
+  }
+
+  moves = this->generateMoves();
+  if (depth == 1) {
+    return moves.size();
+  }
+
+  for (uint32_t i = 0; i < moves.size(); i++) {
+    Board copy(*this);  // TODO: What is the performance impact of copying?
+    copy.makeMove(moves[i].src, moves[i].dest, moves[i].promotion);
+    int subCount = copy.perft(depth - 1);
+    if (printSubcounts) {
+        std::cout << sq_name(moves[i].src);
+        std::cout << sq_name(moves[i].dest);
+        std::cout << ": " << subCount << std::endl;
+    }
+    count += subCount;
+  }
+  return count;
+}
+
+// Performs perft on the current board upto depth,
+// but divides up the count by each of the board possible from the current 
+void Board::perftDivide(int depth) {
+  std::vector<Move> moves;
+  int count = 0;
+  if (depth == 0) {
+    std::cout << "Done" << std::endl;
+  }
+
+  moves = this->generateMoves();
+
+  for (uint32_t i = 0; i < moves.size(); i++) {
+    // TODO: Print the move name
+    std::cout << sq_name(moves[i].src) << sq_name(moves[i].dest) << get_symbol(moves[i].promotion);
+    // FIXME: Move generation and perft relying on copying the board
+    // is much too slow
+    Board copy(*this);
+    copy.makeMove(moves[i].src, moves[i].dest, moves[i].promotion);
+    int move_count = copy.perft(depth - 1);
+    count += move_count;
+    //TODO: Print the move along with its perft result
+    std::cout << " " << move_count << std::endl;
+  }
+  std::cout << "Total: " << count << std::endl;
+}
+
+char *Board::_generate_valid_attacks() {
+  // TODO: Is this being freed?
+  char *valid_attacks = new char[_VALID_ATTACKS_LEN]();
+  for (int i = 0; i < _VALID_ATTACKS_LEN; i++) {
+    int move_delta = i - _VALID_ATTACKS_OFFSET;
+    if (
+        move_delta == 0) {
+      // Out of bounds
+      continue;
+    }
+    // Pick up and move pieces
+    if (std::find(std::begin(KNIGHT_MOVES),
+                  std::end(KNIGHT_MOVES),
+                  move_delta) != std::end(KNIGHT_MOVES)) {
+      valid_attacks[i] |= (1 << KNIGHT_SHIFT);
+    }
+
+    if (std::find(std::begin(KING_MOVES),
+                  std::end(KING_MOVES),
+                  move_delta) != std::end(KING_MOVES)) {
+      valid_attacks[i] |= (1 << KING_SHIFT);
+    }
+
+    if (std::find(std::begin(WHITE_PAWN_MOVES),
+                  std::end(WHITE_PAWN_MOVES),
+                  move_delta) != std::end(WHITE_PAWN_MOVES)) {
+      valid_attacks[i] |= (1 << WHITE_PAWN_SHIFT);
+    }
+
+    if (std::find(std::begin(BLACK_PAWN_MOVES),
+                  std::end(BLACK_PAWN_MOVES),
+                  move_delta) != std::end(BLACK_PAWN_MOVES)) {
+      valid_attacks[i] |= (1 << BLACK_PAWN_SHIFT);
+    }
+    
+    // Sliding pieces
+    // Movement within a file
+    if (move_delta % (UP) == 0) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << ROOK_SHIFT);
+    }
+    if (move_delta % (DOWN) == 0) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << ROOK_SHIFT);
+    }
+    // Movement within a rank
+    if (move_delta <=7 && move_delta >= -7) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << ROOK_SHIFT);
+    }
+
+    // Movement along diagonals
+    if (move_delta % (UP+RIGHT) == 0) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << BISHOP_SHIFT);
+    }
+    if (move_delta % (UP+LEFT) == 0) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << BISHOP_SHIFT);
+    }
+    if (move_delta % (DOWN+RIGHT) == 0) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << BISHOP_SHIFT);
+    }
+    if (move_delta % (DOWN+LEFT) == 0) {
+      valid_attacks[i] |= (1 << QUEEN_SHIFT);
+      valid_attacks[i] |= (1 << BISHOP_SHIFT);
+    }
+  }
+  
+  return valid_attacks;
+}
+
+// Debug function to print the VALID_ATTACKS array
+void Board::_print_valid_attacks(int bit_shift) {
+  int piece_num = bit_shift;
+  // Map our bit shifts onto our piece nums, so we can use get_symbol
+  if (piece_num == 0) {
+    piece_num++;
+  }
+  for (int up = 7; up >= -7; up--) {
+    for(int right = -7; right <= 7; right ++) {
+      char valid_attackers = _VALID_ATTACKS[(up * UP) + right * (RIGHT) + _VALID_ATTACKS_OFFSET];
+      if (valid_attackers & (1 << bit_shift)) {
+        std::cout << get_symbol(piece_num) << " ";
+      } else {
+        std::cout << "_ ";
+      }
+    }
+    std::cout << "\n";
+  }
+  std::cout << "\n";
 }
 
 // Returns true if a piece of type piece on square src can
@@ -627,75 +949,6 @@ bool Board::_attacks(int piece, int src, int dest) {
   return true;
 }
 
-// Count the number of possible moves generated by this board
-// for each move up to certain depth
-long Board::perft(int depth) {
-  std::vector<Move> moves;
-  long count = 0;
-  if (depth == 0) {
-    return count;
-  }
-
-  moves = this->generateMoves();
-  if (depth == 1) {
-    /*
-    for (int i = 0; i < moves.size(); i++) {
-        std::cout << " " << sq_name(moves[i].src);
-        std::cout << " " << sq_name(moves[i].dest) << std::endl;
-    }
-    */
-    return moves.size();
-  }
-
-  for (uint32_t i = 0; i < moves.size(); i++) {
-    // FIXME: Move generation and perft relying on copying the board
-    // is much too slow
-    Board copy(*this);
-    copy.makeMove(moves[i].src, moves[i].dest, moves[i].promotion);
-    int subCount = copy.perft(depth - 1);
-    // TODO: Add option for this printing at the top level of perft, as it is useful to compare to
-    //       stockfish
-    /*
-    if (depth == 3) {
-        std::cout << sq_name(moves[i].src);
-        std::cout << sq_name(moves[i].dest);
-        std::cout << ": " << subCount << std::endl;
-    }
-    std::cout << sq_name(moves[i].src);
-    std::cout << sq_name(moves[i].dest);
-    std::cout << ": " << subCount << std::endl;
-    */
-    count += subCount;
-  }
-  return count;
-}
-
-// Performs perft on the current board upto depth,
-// but divides up the count by each of the board possible from the current 
-void Board::perftDivide(int depth) {
-  std::vector<Move> moves;
-  int count = 0;
-  if (depth == 0) {
-    std::cout << "Done" << std::endl;
-  }
-
-  moves = this->generateMoves();
-
-  for (uint32_t i = 0; i < moves.size(); i++) {
-    // TODO: Print the move name
-    std::cout << sq_name(moves[i].src) << sq_name(moves[i].dest) << get_symbol(moves[i].promotion);
-    // FIXME: Move generation and perft relying on copying the board
-    // is much too slow
-    Board copy(*this);
-    copy.makeMove(moves[i].src, moves[i].dest, moves[i].promotion);
-    int move_count = copy.perft(depth - 1);
-    count += move_count;
-    //TODO: Print the move along with its perft result
-    std::cout << " " << move_count << std::endl;
-  }
-  std::cout << "Total: " << count << std::endl;
-}
-
 // Returns whether the given square is attacked by color
 bool Board::_attacked(int dest_sq, int color) {
   for (int src_sq = A1; src_sq <= H8; src_sq++) {
@@ -711,268 +964,4 @@ bool Board::_attacked(int dest_sq, int color) {
     }
   }
   return false;
-}
-
-// Print the in-bounds portion of the board
-std::ostream& operator<<(std::ostream &strm, const Board &b) {
-  std::string top = " ";
-  std::string bottom = " ";
-  for (int i = 0; i < 8; i++) {
-    top = top + "_ ";
-    bottom = bottom + "¯ ";
-  }
-  std::string board;
-  for (int i = A8; i >= A1; i+=DOWN) {
-    board = board + "|";
-    for (int j = 0; j < 8; j+=RIGHT) {
-      std::string symbol = get_symbol(b._board[i + j]);
-      board = board + symbol + "|";
-    }
-    board = board + " " + std::to_string(8 - ((A8 - i) / UP));  // Print ranks
-    board = board + "\n";
-  }
-  return strm << top << "\n" << board  << bottom << "\n a b c d e f g h";
-}
-
-int symbol_to_piece(char sym) {
-  int piece_num;
-  switch(sym) {
-    case ' ':
-      piece_num = EMPTY;
-      break;
-    case 'p':
-      piece_num = -PAWN;
-      break;
-    case 'P':
-      piece_num = PAWN;
-      break;
-    case 'q':
-      piece_num = -QUEEN;
-      break;
-    case 'Q':
-      piece_num = QUEEN;
-      break;
-    case 'k':
-      piece_num = -KING;
-      break;
-    case 'K':
-      piece_num = KING;
-      break;
-    case 'N':
-      piece_num = KNIGHT;
-      break;
-    case 'n':
-      piece_num =  -KNIGHT;
-      break;
-    case 'b':
-      piece_num = -BISHOP;
-      break;
-    case 'B':
-      piece_num = BISHOP;
-      break;
-    case 'r':
-      piece_num = -ROOK;
-      break;
-    case 'R':
-      piece_num = ROOK;
-      break;
-    default:
-      piece_num = OUTOFBOUNDS;
-  }
-  return piece_num;
-}
-
-std::string get_symbol(int piece_num) {
-  std::string symbol;
-  switch(piece_num) {
-    case NO_PROMOTION:
-      symbol = "";
-      break;
-    case EMPTY:
-      symbol = "_";
-      break;
-    case PAWN:
-      symbol = "P";
-      break;
-    case -PAWN:
-      symbol = "p";
-      break;
-    case KNIGHT:
-      symbol = "N";
-      break;
-    case -KNIGHT:
-      symbol = "n";
-      break;
-    case ROOK:
-      symbol = "R";
-      break;
-    case -ROOK:
-      symbol = "r";
-      break;
-    case BISHOP:
-      symbol = "B";
-      break;
-    case -BISHOP:
-      symbol = "b";
-      break;
-    case KING:
-      symbol = "K";
-      break;
-    case -KING:
-      symbol = "k";
-      break;
-    case QUEEN:
-      symbol = "Q";
-      break;
-    case -QUEEN:
-      symbol = "q";
-      break;
-    default:
-      symbol = "X";
-      break;
-  }
-  return symbol;
-}
-
-char *Board::_generate_valid_attacks() {
-  // TODO: Is this being freed?
-  char *valid_attacks = new char[_VALID_ATTACKS_LEN]();
-  for (int i = 0; i < _VALID_ATTACKS_LEN; i++) {
-    int move_delta = i - _VALID_ATTACKS_OFFSET;
-    if (
-        move_delta == 0) {
-      // Out of bounds
-      continue;
-    }
-    // Pick up and move pieces
-    if (std::find(std::begin(KNIGHT_MOVES),
-                  std::end(KNIGHT_MOVES),
-                  move_delta) != std::end(KNIGHT_MOVES)) {
-      valid_attacks[i] |= (1 << KNIGHT_SHIFT);
-    }
-
-    if (std::find(std::begin(KING_MOVES),
-                  std::end(KING_MOVES),
-                  move_delta) != std::end(KING_MOVES)) {
-      valid_attacks[i] |= (1 << KING_SHIFT);
-    }
-
-    if (std::find(std::begin(WHITE_PAWN_MOVES),
-                  std::end(WHITE_PAWN_MOVES),
-                  move_delta) != std::end(WHITE_PAWN_MOVES)) {
-      valid_attacks[i] |= (1 << WHITE_PAWN_SHIFT);
-    }
-
-    if (std::find(std::begin(BLACK_PAWN_MOVES),
-                  std::end(BLACK_PAWN_MOVES),
-                  move_delta) != std::end(BLACK_PAWN_MOVES)) {
-      valid_attacks[i] |= (1 << BLACK_PAWN_SHIFT);
-    }
-    
-    // Sliding pieces
-    // Movement within a file
-    if (move_delta % (UP) == 0) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << ROOK_SHIFT);
-    }
-    if (move_delta % (DOWN) == 0) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << ROOK_SHIFT);
-    }
-    // Movement within a rank
-    if (move_delta <=7 && move_delta >= -7) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << ROOK_SHIFT);
-    }
-
-    // Movement along diagonals
-    if (move_delta % (UP+RIGHT) == 0) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << BISHOP_SHIFT);
-    }
-    if (move_delta % (UP+LEFT) == 0) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << BISHOP_SHIFT);
-    }
-    if (move_delta % (DOWN+RIGHT) == 0) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << BISHOP_SHIFT);
-    }
-    if (move_delta % (DOWN+LEFT) == 0) {
-      valid_attacks[i] |= (1 << QUEEN_SHIFT);
-      valid_attacks[i] |= (1 << BISHOP_SHIFT);
-    }
-  }
-  
-  return valid_attacks;
-}
-
-// Debug function to print the VALID_ATTACKS array
-void Board::_print_valid_attacks(int bit_shift) {
-  int piece_num = bit_shift;
-  // Map our bit shifts onto our piece nums, so we can use get_symbol
-  if (piece_num == 0) {
-    piece_num++;
-  }
-  for (int up = 7; up >= -7; up--) {
-    for(int right = -7; right <= 7; right ++) {
-      char valid_attackers = _VALID_ATTACKS[(up * UP) + right * (RIGHT) + _VALID_ATTACKS_OFFSET];
-      if (valid_attackers & (1 << bit_shift)) {
-        std::cout << get_symbol(piece_num) << " ";
-      } else {
-        std::cout << "_ ";
-      }
-    }
-    std::cout << "\n";
-  }
-  std::cout << "\n";
-}
-
-// Return rank/file notation for internal index intothe board array
-std::string sq_name(int sq) {
-  int delta = sq - A1;
-  int file = delta % 8;
-  int rank = 1 + (delta / UP);
-  char file_ch = (char)((int)'a' + file);
-  return file_ch + std::to_string(rank);
-}
-
-// Returns a string representing the Forsyth-Edwards Notation
-//  for this board
-std::string Board::to_fen() {
-  std::string fen = "";
-  for (int rank = A8; rank >= A1; rank+=DOWN) {
-    int empty_spaces = 0;
-    for (int sq = rank; sq <= rank + 7 * RIGHT; sq+=RIGHT) {
-      if (_board[sq] == EMPTY) {
-        empty_spaces++;
-      } else {
-        if (empty_spaces > 0) {
-          fen += std::to_string(empty_spaces);
-          empty_spaces = 0;
-        }
-        fen += get_symbol(_board[sq]);
-      }
-    }
-    if (empty_spaces > 0) {
-      fen += std::to_string(empty_spaces);
-      empty_spaces = 0;
-    }
-    
-    if (rank != A1) {
-      fen += "/";
-    }
-  }
-  fen += (_color_to_play == WHITE ? " w " : " b ");
-  std::string castling = "";
-  castling += _castling_rights[WHITE][KING_SIDE] ? "K" : "";
-  castling += _castling_rights[WHITE][QUEEN_SIDE] ? "Q" : "";
-  castling += _castling_rights[BLACK][KING_SIDE] ? "k" : "";
-  castling += _castling_rights[BLACK][QUEEN_SIDE] ? "q" : "";
-  fen += castling.size() == 0 ? "-" : castling;
-  fen += _en_passant_square == NO_SQUARE ? " - "
-                  : " " + sq_name(_en_passant_square) + " ";
-  fen += " " + std::to_string(_half_moves);
-  fen += " " + std::to_string(_full_moves);
-  return fen;
 }

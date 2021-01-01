@@ -86,42 +86,61 @@ std::string sq_name(int sq);
 // TODO: Standardize on camelCase or under_scores
 class Board {
   public:
+    // Constructors/Destructors
     Board() : Board(INITIAL_FEN) {};
     Board(const Board& other);
     Board(std::string fen);
     Board& operator=(Board other);
     ~Board();
-    // TODO: Need to make a destructor to free char array
-    friend std::ostream& operator<<(std::ostream &strm, const Board &b);
-    std::string to_fen();
-    bool white_turn();
+ 
+    // Moves the piece from src to dest if it is a valid move on this board.
+    //  if the pawn can promote, then the chosen piece is also given
+    void makeMove(int src, int dest);
     void makeMove(int src, int dest, int promotion);
     // TODO: Add an "undoMove", which would be more efficient than creating a whole new board.
+
+    // Given the current state of the board, generate a vector of Moves
     std::vector<Move> generateMoves();
 
-    long perft(int depth);
+    friend std::ostream& operator<<(std::ostream &strm, const Board &b);
+    std::string to_fen();
+
+    // Perft counts the number of leaves of the search tree for a given depth
+    // This is useful in debugging to compare this value with that of a known
+    // correct chess engine
+    long perft(int depth, bool printSubcounts = false);
     void perftDivide(int depth);
     
   private:
     int *_board;
-    int _half_moves;
-    int _full_moves;
+    int _half_moves;  // Number of moves (black or white) since the last pawn push or piece capture
+    int _full_moves;  // Number of times black has moved
     int _color_to_play;
-    int _en_passant_square;
-    bool **_castling_rights;
+    int _en_passant_square;  // If a pawn moved 2 spaces last turn, this is the en passant square
+    bool **_castling_rights;  // Boolean array storing which castling moves are still available
 
+    // Cache the location of the white/black kings because we have to
+    //  check if these pieces are in check often
     int _white_king_sq;
     int _black_king_sq;
 
     const static char *_VALID_ATTACKS;  // Bitboard caching valid piece movements
+
+    // Helper function which initializes _VALID_ATTACKS
+    // based on how pieces can move
     char *_generate_valid_attacks();
+
+    // Method to aid in debugging by printing the _VALID_ATTACKS
+    //  bitboard for a specific piece
     void _print_valid_attacks(int bit_shift);
 
+    // Helper function returning whether the piece on src attacks the square dest
     bool _attacks(int piece, int src, int dest);
+    // Helper function returning whether the given color has a piece attacking
+    //  the given square
     bool _attacked(int dest_sq, int color);
 
 };
 
 
-
-#endif // _POINT_HPP_
+#endif // _BOARD_HPP_
