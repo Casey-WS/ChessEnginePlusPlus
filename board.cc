@@ -15,7 +15,9 @@
 
 const char *Board::_VALID_ATTACKS = 0;
 
-// Get the index into _board array from rank/file notation
+// Helper function which returns the index into _board array
+//  corresponding to the given alpha-numeric board position given
+// E.g. get_pos_rankfile(A2) gives the index for the piece at A2
 int get_pos_rankfile(std::string pos) {
   std::transform(pos.begin(), pos.end(), pos.begin(), ::tolower);
   int file = pos[0] - 'a';
@@ -23,6 +25,8 @@ int get_pos_rankfile(std::string pos) {
   return A1 + file * RIGHT + rank * UP; 
 }
 
+// Helper function which given the string representation of a piece, return our corresponding
+//  int value defined. Needed for converting from FEN to Board representation
 int symbol_to_piece(char sym) {
   int piece_num;
   switch(sym) {
@@ -71,6 +75,8 @@ int symbol_to_piece(char sym) {
   return piece_num;
 }
 
+// Helper function which given the integer definition of a piece (E.g. PAWN == 1)
+// returns the string representation. Used for drawing the board.
 std::string get_symbol(int piece_num) {
   std::string symbol;
   switch(piece_num) {
@@ -123,7 +129,8 @@ std::string get_symbol(int piece_num) {
   return symbol;
 }
 
-// Return rank/file notation for internal index intothe board array
+// Helper function which returns rank/file notation for internal index into
+//  the board array
 std::string sq_name(int sq) {
   int delta = sq - A1;
   int file = delta % 8;
@@ -132,9 +139,10 @@ std::string sq_name(int sq) {
   return file_ch + std::to_string(rank);
 }
 
-// TODO: This function could just ask for the FEN of the other function, and
-//       initialize the board from that... So why not?
+// Copy-Constructor
 Board::Board(const Board& other) {
+  // TODO: This function could just ask for the FEN of the other function, and
+  //       initialize the board from that... So why not?
   _board = new int[BOARD_ARR_LEN];
   std::copy(other._board, other._board+BOARD_ARR_LEN, _board);
   _half_moves = other._half_moves;
@@ -152,14 +160,14 @@ Board::Board(const Board& other) {
   _black_king_sq = other._black_king_sq;
 }
 
-// Initialize a chessboard object from FEN
+// Construct Board from FEN string
 Board::Board(std::string fen) {
   // Split up the fen
   std::vector<std::string> tokens;
   std::istringstream iss(fen);
   std::copy(std::istream_iterator<std::string>(iss),
-            std::istream_iterator<std::string>(),
-            std::back_inserter(tokens));
+      std::istream_iterator<std::string>(),
+      std::back_inserter(tokens));
   std::string board_str = tokens[0];
   std::string color_to_play_str = tokens[1];
   std::string castling_rights_str = tokens[2];
@@ -190,10 +198,10 @@ Board::Board(std::string fen) {
         int sq = A1 + (UP * rank) + (RIGHT * file);
         _board[sq] = p;
         if (p == KING) {
-           _white_king_sq = sq; 
+          _white_king_sq = sq; 
         }
         if (p == -KING) {
-           _black_king_sq = sq; 
+          _black_king_sq = sq; 
         }
         file++;
       }
@@ -204,30 +212,32 @@ Board::Board(std::string fen) {
   _full_moves = std::stoi(full_moves_str);
   _color_to_play = color_to_play_str.compare("w") ? BLACK : WHITE;
   _en_passant_square = en_passant_sq_str.compare("-")
-                       ? get_pos_rankfile(en_passant_sq_str)
-                       : NO_SQUARE;
+    ? get_pos_rankfile(en_passant_sq_str)
+    : NO_SQUARE;
   _castling_rights = new bool*[2]();
   _castling_rights[WHITE] = new bool[2]();
   _castling_rights[BLACK] = new bool[2]();
   _castling_rights[WHITE][QUEEN_SIDE] = 
-                  castling_rights_str.find("Q", 0) != std::string::npos;
+    castling_rights_str.find("Q", 0) != std::string::npos;
   _castling_rights[WHITE][KING_SIDE] =
-                  castling_rights_str.find("K", 0) != std::string::npos;
+    castling_rights_str.find("K", 0) != std::string::npos;
   _castling_rights[BLACK][QUEEN_SIDE] =
-                  castling_rights_str.find("q", 0) != std::string::npos;
+    castling_rights_str.find("q", 0) != std::string::npos;
   _castling_rights[BLACK][KING_SIDE] =
-                  castling_rights_str.find("k", 0) != std::string::npos;
-  
+    castling_rights_str.find("k", 0) != std::string::npos;
+
   _VALID_ATTACKS = _generate_valid_attacks();
 }
 
+// Move operator (Transfer of ownership when using the asisgnment operator)
 Board& Board::operator=(Board other) {
-    delete[] this->_board;
-    memcpy(this, &other, sizeof(Board));
-    other._board = NULL;
-    return *this;
+  delete[] this->_board;
+  memcpy(this, &other, sizeof(Board));
+  other._board = NULL;
+  return *this;
 }
 
+// Destructor
 Board::~Board() {
   delete[] _castling_rights[WHITE];
   delete[] _castling_rights[BLACK];
@@ -236,14 +246,14 @@ Board::~Board() {
   _board = NULL;
 }
 
+// Overloaded makeMove function for convenience when not promoting
 void Board::makeMove(int src, int dest) {
-    this->makeMove(src, dest, NO_PROMOTION);
+  this->makeMove(src, dest, NO_PROMOTION);
 }
 
-// Move a piece on src to dest
-// Does nothing if the move is illegal (TODO: Capture this some other way?)
-// TODO: Ideally make this more efficient when we move to chess-engine
-// TODO: Overload the makeMove method so you don't always have to specify the promotion field
+// Moves a piece from src to dest if legal to do so.
+// TODO: Some illegal moves do nothing, some illegal moves assert failure. Should be consistent
+// TODO: How to make this more efficient?
 void Board::makeMove(int src, int dest, int promotion) {
   int p = _board[src];
   int q = _board[dest];
@@ -256,9 +266,8 @@ void Board::makeMove(int src, int dest, int promotion) {
     std::cout << "Must move a black piece" << std::endl;
     return;
   }
- 
+
   // Castling
-  // TODO: Add check for source of king to all of these, becuase they are running when the king isn't trrying to castle
   if (p == KING && src == A1 + (RIGHT*4) && dest == A1 + (RIGHT*6)) {
     // White king-side castle
     if (!_castling_rights[WHITE][KING_SIDE]
@@ -267,8 +276,8 @@ void Board::makeMove(int src, int dest, int promotion) {
       return;
     }
     if (Board::_attacked(_white_king_sq, BLACK)  // FIXME: Factor out common check
-      || Board::_attacked(_white_king_sq + RIGHT, BLACK)
-      || Board::_attacked(_white_king_sq + 2*RIGHT, BLACK)) {
+        || Board::_attacked(_white_king_sq + RIGHT, BLACK)
+        || Board::_attacked(_white_king_sq + 2*RIGHT, BLACK)) {
       std::cout << "Cannot castle out of, or through check" << std::endl;
       return;
     }
@@ -289,8 +298,8 @@ void Board::makeMove(int src, int dest, int promotion) {
       return;
     }
     if (Board::_attacked(_white_king_sq, BLACK)  // FIXME: Factor out common check
-      || Board::_attacked(_white_king_sq + LEFT, BLACK)
-      || Board::_attacked(_white_king_sq + 2*LEFT, BLACK)) {
+        || Board::_attacked(_white_king_sq + LEFT, BLACK)
+        || Board::_attacked(_white_king_sq + 2*LEFT, BLACK)) {
       std::cout << "Cannot castle out of, or through check" << std::endl;
       return;
     }
@@ -310,8 +319,8 @@ void Board::makeMove(int src, int dest, int promotion) {
       return;
     }
     if (Board::_attacked(_black_king_sq, WHITE) // FIXME: Factor out common check
-      || Board::_attacked(_black_king_sq + RIGHT, WHITE)
-      || Board::_attacked(_black_king_sq + 2*RIGHT, WHITE)) {
+        || Board::_attacked(_black_king_sq + RIGHT, WHITE)
+        || Board::_attacked(_black_king_sq + 2*RIGHT, WHITE)) {
       std::cout << "Cannot castle out of, or through check" << std::endl;
       return;
     }
@@ -332,8 +341,8 @@ void Board::makeMove(int src, int dest, int promotion) {
       return;
     }
     if (Board::_attacked(_black_king_sq, WHITE)  // FIXME: Factor out common check
-      || Board::_attacked(_black_king_sq + LEFT, WHITE)
-      || Board::_attacked(_black_king_sq + 2*LEFT, WHITE)) {
+        || Board::_attacked(_black_king_sq + LEFT, WHITE)
+        || Board::_attacked(_black_king_sq + 2*LEFT, WHITE)) {
       std::cout << "Cannot castle out of, or through check" << std::endl;
       return;
     }
@@ -344,19 +353,23 @@ void Board::makeMove(int src, int dest, int promotion) {
     _castling_rights[BLACK][QUEEN_SIDE] = false;
     _castling_rights[BLACK][KING_SIDE] = false;
     _en_passant_square = NO_SQUARE;  // TODO: Consolidate this with the later check?
-      _black_king_sq = dest;
-  // FIXME: Make castling less verbose
-  // End Castling  //
+    _black_king_sq = dest;
+    // FIXME: Make castling less verbose
+    // End Castling  //
   } else {
+    // Non castling moves
 
-    // Verify that the source square can move to destination square
+    // Check whether the piece moves the way it is being asked to
+    // Simply returns whether the proposed move follows the move set defined fo this piece
     if (!_attacks(p, src, dest)) {
       std::cout << "Piece cannot be moved there" << std::endl;
       assert(false);
       return;
     }
-    // Because our attacks method doesn't know that pawns attack different than they
-    //  move. Ensure that pawn vertical moves aren't attacks
+
+    // Pawns move differently than they attack, but our pawn move-sets include both.
+    //  So here we have to do an extra check to check that a proposed capture by a
+    //  pawn is diagonally.
     if (p == PAWN || p == -PAWN) {
       if ((dest - src) % UP == 0) {
         if (q != EMPTY) {
@@ -367,33 +380,37 @@ void Board::makeMove(int src, int dest, int promotion) {
       }
     }
 
-    // Verify captures are of opposing color
+    // If this move would be a capture, verify it would be a capture of an opposing color
     if (q != EMPTY && q * p > 0) {
       std::cout << "Cannot capture piece of same color" << std::endl; 
       assert(false);
       return;
     }
 
-    // Verify pawn's are promoted
+    // If the pawn would move to the last rank, ensure the move involved promotion.
     if ((p == -PAWN && dest > A8 && dest < H8) ||
         (p == PAWN  && dest > A1 && dest < H1)) {
-        if (promotion != -KNIGHT && promotion != KNIGHT && promotion != QUEEN && promotion != -QUEEN &&
-            promotion != ROOK && promotion != -ROOK && promotion != BISHOP && promotion != -BISHOP) {
-              assert(false);
-            return;  // Pawn must be promoted
-        }
+      if (promotion != -KNIGHT && promotion != KNIGHT && promotion != QUEEN && promotion != -QUEEN &&
+          promotion != ROOK && promotion != -ROOK && promotion != BISHOP && promotion != -BISHOP) {
+        assert(false);
+        return;  // Pawn must be promoted
+      }
     }
 
-    int *backup = new int[BOARD_ARR_LEN];  // Copy board incase we have to undo
-    int backup_white_king_sq = _white_king_sq;  // FIXME: This is in elegant. Think about how the flow of this function could be changed to avoid
+    // Prepare to undo the move by saving copies of certain state
+    // TODO: Is there a way to undo a move that does not involve just backing up the entire board/data?
+    int *backup = new int[BOARD_ARR_LEN];
+    int backup_white_king_sq = _white_king_sq;  // FIXME: It's a little awkward/unclear why we have to save only these three
     int backup_black_king_sq = _black_king_sq;
     std::copy(_board, _board+BOARD_ARR_LEN, backup);
-    // TODO: Would it be more efficient to undo this, instead of a whole copy?
 
+    //
     // Make Move
+    //
     _board[dest] = p;
     _board[src] = EMPTY;
-    // Optimization: Keep track of king for checking if we are in check
+
+    // Update our cached king positions
     if (p == KING) {
       _white_king_sq = dest;
     } else if (p == -KING) {
@@ -414,7 +431,7 @@ void Board::makeMove(int src, int dest, int promotion) {
 
     // Undo a move if the player put themselves in check, or didn't evade check
     if ((_color_to_play == WHITE && _attacked(_white_king_sq, BLACK))
-       || (_color_to_play == BLACK && _attacked(_black_king_sq, WHITE))) {
+        || (_color_to_play == BLACK && _attacked(_black_king_sq, WHITE))) {
       //std::cout << "King must not be in check" << std::endl;
       delete[] _board;
       _board = backup;
@@ -422,11 +439,10 @@ void Board::makeMove(int src, int dest, int promotion) {
       _black_king_sq = backup_black_king_sq;
       return;
     } else {
-        delete[] backup;
+      delete[] backup;
     }
 
     // If it is a pawn push, set the en passant square
-    // TODO: Should this be moved to inside the "Undo" time frame?
     if (p == PAWN && dest - src == 2 * UP) {
       _en_passant_square = src + UP;
     } else if (p == -PAWN && dest - src == 2 * DOWN) {
@@ -445,7 +461,7 @@ void Board::makeMove(int src, int dest, int promotion) {
     }
 
     // Set castling rights
-    // TODO: Would it be better to invert this check? Check for castling rights, and then rechekc that pieces haven't move?
+    // TODO: Would it be better to invert this check? Check for castling rights, and then recheck that pieces haven't moved?
     if ((p == ROOK && src == A1) || p == KING) {
       _castling_rights[WHITE][QUEEN_SIDE] = false;
     }
@@ -460,26 +476,30 @@ void Board::makeMove(int src, int dest, int promotion) {
     }
   }
 
+  // Increment full-move counter
   if (_color_to_play == BLACK) {
-    // Increment full move counter
     _full_moves++;
   }
-  // TODO: Implement tracking for threefold repetition
-  if (p == PAWN || p == -PAWN || q != EMPTY) { // TODO: Is this right?
+
+  // TODO: Implement checking for 50-move rule
+  if (p == PAWN || p == -PAWN || q != EMPTY) { // TODO: Does this capture all conditions where half moves are reset?
     _half_moves = 0;
   } else {
     _half_moves++;
   }
+
+  // TODO: Implement tracking for three-fold repetition.
 
   _color_to_play = _color_to_play == WHITE ? BLACK : WHITE;;
 }
 
 // Generate all possible legal moves for the current board
 std::vector<Move> Board::generateMoves() {
-  std::vector<Move> moves;
   std::vector<Move> pseudo_moves;
+  std::vector<Move> moves;
 
-  for (int sq = A1; sq <= H8; sq++) { // Loop over all squares
+  // Loop over all squares and generate moves for each piece that can move
+  for (int sq = A1; sq <= H8; sq++) {
     if (_board[sq] == OUTOFBOUNDS) {  // Skip out of bounds
       sq += (UP/2) - 1;
       continue;
@@ -491,7 +511,7 @@ std::vector<Move> Board::generateMoves() {
       continue;
     }
     const std::vector<int> *move_set; // For current piece, its moves
-    
+
     // FIXME: Replace this with a static const map
     switch (p) {
       case PAWN: 
@@ -522,6 +542,7 @@ std::vector<Move> Board::generateMoves() {
       default:
         break;
     }
+
     // Because the Pawn move set is different depending on Color, calculate that here
     if (p == PAWN || p == -PAWN) {
       // Pawn Pushing
@@ -540,7 +561,7 @@ std::vector<Move> Board::generateMoves() {
         pseudo_moves.push_back((Move){sq, sq+DOWN, -ROOK});
         pseudo_moves.push_back((Move){sq, sq+DOWN, -KNIGHT});
       }
-      
+
       if (p == PAWN && sq >= A8 + DOWN && sq <= H8 + DOWN && _board[sq+UP] == EMPTY) {  // White promotion
         pseudo_moves.push_back((Move){sq, sq+UP, QUEEN});
         pseudo_moves.push_back((Move){sq, sq+UP, BISHOP});
@@ -553,13 +574,13 @@ std::vector<Move> Board::generateMoves() {
       int right_attack = sq + push + RIGHT;
       if (_board[left_attack] != OUTOFBOUNDS &&
           (_board[left_attack]*p < 0 ||
-          _en_passant_square == left_attack)) {
-            pseudo_moves.push_back((Move){sq, sq+push+LEFT, NO_PROMOTION});
+           _en_passant_square == left_attack)) {
+        pseudo_moves.push_back((Move){sq, sq+push+LEFT, NO_PROMOTION});
       }
       if (_board[right_attack] != OUTOFBOUNDS &&
           (_board[right_attack]*p < 0 ||
-          _en_passant_square == right_attack)) {
-            pseudo_moves.push_back((Move){sq, sq+push+RIGHT, NO_PROMOTION});
+           _en_passant_square == right_attack)) {
+        pseudo_moves.push_back((Move){sq, sq+push+RIGHT, NO_PROMOTION});
       }
       continue;  // No further handling of pawn moves
     }
@@ -567,9 +588,9 @@ std::vector<Move> Board::generateMoves() {
     // Loop through current piece's possible moves, and add any legal ones
     for (uint32_t i = 0; i < move_set->size(); i++) {
       int delta = (*move_set)[i];
-
       int dest = sq;
-      while (true) {  // To account for sliding, continue the current move until edge of board
+
+      while (true) {  // To account for sliding, continue the current move until edge of board or another piece
         dest += delta;
         int q = _board[dest];
         if (q == OUTOFBOUNDS) {
@@ -618,22 +639,18 @@ std::vector<Move> Board::generateMoves() {
       pseudo_moves.push_back((Move){king_pos, castle_pos, NO_PROMOTION});
     }
   }
-  // Filter out moves that are illegal by making each pseudo move,
-  //  and seeing if the player's king is in check after that.
-  //  Very simply - if a player makes a move and their king is in check,
-  //   we can assume it is an illegal move
+  // Filter out illegal pseudo-moves that would leave/put the player in check.
   for (uint32_t i = 0; i < pseudo_moves.size(); i++) {
-    Board copy(*this);  // TODO: Maybe do this inplace?
+    Board copy(*this);  // TODO: If we supported undo, it might be more efficient to use that instead of copying
     copy.makeMove(pseudo_moves[i].src, pseudo_moves[i].dest, pseudo_moves[i].promotion);
-    // TODO: This is bad. We had a bug here because our makeMove function
-    //        will just silently do nothing if it finds a move to be illegal.
-    //       Check for that here
-    
+
+    // FIXME: Because our makeMove function has unclear behavior from illegal moves
+    //         we make sure that we actually moved a piece before calling it legal
     if ((copy._board[pseudo_moves[i].src] != _board[pseudo_moves[i].src]) &&
         ((_color_to_play == WHITE &&
-        !copy._attacked(copy._white_king_sq, BLACK)) ||
-        (_color_to_play == BLACK &&
-        !copy._attacked(copy._black_king_sq, WHITE)))) {
+          !copy._attacked(copy._white_king_sq, BLACK)) ||
+         (_color_to_play == BLACK &&
+          !copy._attacked(copy._black_king_sq, WHITE)))) {
       moves.push_back(pseudo_moves[i]);
     }
   }
@@ -682,7 +699,7 @@ std::string Board::to_fen() {
       fen += std::to_string(empty_spaces);
       empty_spaces = 0;
     }
-    
+
     if (rank != A1) {
       fen += "/";
     }
@@ -695,7 +712,7 @@ std::string Board::to_fen() {
   castling += _castling_rights[BLACK][QUEEN_SIDE] ? "q" : "";
   fen += castling.size() == 0 ? "-" : castling;
   fen += _en_passant_square == NO_SQUARE ? " - "
-                  : " " + sq_name(_en_passant_square) + " ";
+    : " " + sq_name(_en_passant_square) + " ";
   fen += " " + std::to_string(_half_moves);
   fen += " " + std::to_string(_full_moves);
   return fen;
@@ -720,9 +737,9 @@ long Board::perft(int depth, bool printSubcounts) {
     copy.makeMove(moves[i].src, moves[i].dest, moves[i].promotion);
     int subCount = copy.perft(depth - 1);
     if (printSubcounts) {
-        std::cout << sq_name(moves[i].src);
-        std::cout << sq_name(moves[i].dest);
-        std::cout << ": " << subCount << std::endl;
+      std::cout << sq_name(moves[i].src);
+      std::cout << sq_name(moves[i].dest);
+      std::cout << ": " << subCount << std::endl;
     }
     count += subCount;
   }
@@ -756,7 +773,7 @@ void Board::perftDivide(int depth) {
 }
 
 char *Board::_generate_valid_attacks() {
-  // TODO: Is this being freed?
+  // TODO: Replace this with a smart pointer so it is correctly freed
   char *valid_attacks = new char[_VALID_ATTACKS_LEN]();
   for (int i = 0; i < _VALID_ATTACKS_LEN; i++) {
     int move_delta = i - _VALID_ATTACKS_OFFSET;
@@ -767,29 +784,29 @@ char *Board::_generate_valid_attacks() {
     }
     // Pick up and move pieces
     if (std::find(std::begin(KNIGHT_MOVES),
-                  std::end(KNIGHT_MOVES),
-                  move_delta) != std::end(KNIGHT_MOVES)) {
+          std::end(KNIGHT_MOVES),
+          move_delta) != std::end(KNIGHT_MOVES)) {
       valid_attacks[i] |= (1 << KNIGHT_SHIFT);
     }
 
     if (std::find(std::begin(KING_MOVES),
-                  std::end(KING_MOVES),
-                  move_delta) != std::end(KING_MOVES)) {
+          std::end(KING_MOVES),
+          move_delta) != std::end(KING_MOVES)) {
       valid_attacks[i] |= (1 << KING_SHIFT);
     }
 
     if (std::find(std::begin(WHITE_PAWN_MOVES),
-                  std::end(WHITE_PAWN_MOVES),
-                  move_delta) != std::end(WHITE_PAWN_MOVES)) {
+          std::end(WHITE_PAWN_MOVES),
+          move_delta) != std::end(WHITE_PAWN_MOVES)) {
       valid_attacks[i] |= (1 << WHITE_PAWN_SHIFT);
     }
 
     if (std::find(std::begin(BLACK_PAWN_MOVES),
-                  std::end(BLACK_PAWN_MOVES),
-                  move_delta) != std::end(BLACK_PAWN_MOVES)) {
+          std::end(BLACK_PAWN_MOVES),
+          move_delta) != std::end(BLACK_PAWN_MOVES)) {
       valid_attacks[i] |= (1 << BLACK_PAWN_SHIFT);
     }
-    
+
     // Sliding pieces
     // Movement within a file
     if (move_delta % (UP) == 0) {
@@ -824,7 +841,7 @@ char *Board::_generate_valid_attacks() {
       valid_attacks[i] |= (1 << BISHOP_SHIFT);
     }
   }
-  
+
   return valid_attacks;
 }
 
@@ -870,7 +887,7 @@ bool Board::_attacks(int piece, int src, int dest) {
   }
   // If it is a sliding piece, check that it is not blocked
   if (bit_shift == ROOK_SHIFT || bit_shift == QUEEN_SHIFT ||
-        bit_shift == BISHOP) {
+      bit_shift == BISHOP) {
     int dir;
     if (delta > 0) {
       if (delta < 8)
@@ -905,17 +922,17 @@ bool Board::_attacks(int piece, int src, int dest) {
   //  and that any diagonal moves are for captures only
   if (bit_shift == WHITE_PAWN_SHIFT) {
     if (delta == 2 * UP) {  // Double push
-        if (_board[src + UP] != EMPTY || _board[src + 2*UP] != EMPTY) {  // Check if blocked
-          return false;
-        }
-        if (src > H1 + UP) { // Check if pawn is beyond 2nd rank
-          return false;
-        }
+      if (_board[src + UP] != EMPTY || _board[src + 2*UP] != EMPTY) {  // Check if blocked
+        return false;
+      }
+      if (src > H1 + UP) { // Check if pawn is beyond 2nd rank
+        return false;
+      }
     }
     if (delta == UP) {
-        if (_board[src + UP] != EMPTY) {  // Check if blocked
-          return false;
-        }
+      if (_board[src + UP] != EMPTY) {  // Check if blocked
+        return false;
+      }
     }
     if (delta % UP != 0) {  // Pawn Cpature
       if (_board[dest] == EMPTY) {
@@ -934,9 +951,9 @@ bool Board::_attacks(int piece, int src, int dest) {
       }
     }
     if (delta == DOWN) {
-        if (_board[src + DOWN] != EMPTY) {  // Check if blocked
-          return false;
-        }
+      if (_board[src + DOWN] != EMPTY) {  // Check if blocked
+        return false;
+      }
     }
     if (delta % DOWN != 0) {  // pawn capture
       if (_board[dest] == EMPTY) {
